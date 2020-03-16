@@ -35,9 +35,12 @@ class CrfRnnNet(Fcn8s):
     ICCV 2015 (https://arxiv.org/abs/1502.03240).
     """
 
-    def __init__(self):
+    def __init__(self, num_labels=21, num_iterations=10, params=None):
         super(CrfRnnNet, self).__init__()
-        self.crfrnn = CrfRnn(num_labels=21, num_iterations=10)
+        self.crfrnn = CrfRnn(num_labels=num_labels, num_iterations=num_iterations, crf_init_params=params)
+
+    def set_params(self, params):
+        self.crfrnn.params = params
 
     def forward(self, image):
         out = super(CrfRnnNet, self).forward(image)

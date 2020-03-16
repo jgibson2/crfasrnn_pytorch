@@ -44,7 +44,7 @@ def main():
 
     img_data, img_h, img_w, size = util.get_preprocessed_image(args.image)
 
-    output_file = args.output or args.imaage + "_labels.png"
+    output_file = args.output or args.image + "_labels.png"
 
     model = CrfRnnNet()
     model.load_state_dict(torch.load(args.weights))

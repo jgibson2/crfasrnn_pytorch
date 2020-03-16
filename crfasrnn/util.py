@@ -55,6 +55,8 @@ _PALETTE = [0, 0, 0,
             64, 192, 0,
             192, 192, 0]
 
+
+
 _IMAGENET_MEANS = np.array([123.68, 116.779, 103.939], dtype=np.float32)  # RGB mean values
 
 
@@ -90,7 +92,7 @@ def get_preprocessed_image(file_name):
     return np.expand_dims(im.transpose([2, 0, 1]), 0), img_h, img_w, original_size
 
 
-def get_label_image(probs, img_h, img_w, original_size):
+def get_label_image(probs, img_h, img_w, original_size, palette=_PALETTE):
     """
     Returns the label image (PNG with Pascal VOC colormap) given the probabilities.
 
@@ -106,6 +108,20 @@ def get_label_image(probs, img_h, img_w, original_size):
 
     labels = probs.argmax(axis=0).astype('uint8')[:img_h, :img_w]
     label_im = Image.fromarray(labels, 'P')
-    label_im.putpalette(_PALETTE)
+    label_im.putpalette(palette)
     label_im = label_im.resize(original_size)
     return label_im
+
+def label_image_to_values(label_image, palette=_PALETTE):
+    PALETTE_MAP = {tuple(palette[i:i + 3]): i // 3 for i in range(0, len(palette), 3)}
+    result = np.zeros(label_image.shape[0:2], dtype='uint8')
+    for rgb, i in PALETTE_MAP.items():
+        r,g,b = rgb
+        result += np.uint8(i * np.where(label_image[:, :, 0] == r, 1, 0) * np.where(label_image[:, :, 1] == g, 1, 0) * np.where(label_image[:, :, 2] == b, 1, 0))
+    return result
+
+
+def compute_jaccard_index(label_img, ground_truth, palette=_PALETTE):
+    img_a = label_image_to_values(label_img, palette)
+    img_b = label_image_to_values(ground_truth, palette)
+    return np.sum(np.logical_and(img_a == img_b, np.logical_or(img_a != 0, img_b != 0))) / np.sum(img_a + img_b > 0)
