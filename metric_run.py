@@ -31,9 +31,15 @@ from PIL import Image
 import numpy as np
 from crfasrnn.crfasrnn_model import CrfRnnNet
 from crfasrnn.params import DenseCRFParams
+import matplotlib
+import matplotlib.pyplot as plt
 from optimize_parameters import *
 
-def compute_accuracy(params, model, img_data, img_h, img_w, size, ground_truth):
+matplotlib.use('TkAgg')
+plt.rcParams["figure.figsize"] = (20,16)
+
+
+def compute_accuracy(params, model, img_data, img_h, img_w, size, ground_truth, output_file=None):
     model.set_params(params)
 
     out = model.forward(torch.from_numpy(img_data))
@@ -45,6 +51,9 @@ def compute_accuracy(params, model, img_data, img_h, img_w, size, ground_truth):
 
     acc = util.compute_jaccard_index(predicted, ground_truth)
 
+    if output_file:
+        label_im.save(output_file)
+
     del predicted
     del label_im
     del out
@@ -52,30 +61,20 @@ def compute_accuracy(params, model, img_data, img_h, img_w, size, ground_truth):
 
     return acc
 
+
 def compute_average_accuracy(params, model, imgs, img_hs, img_ws, sizes, ground_truths):
     model.set_params(params)
     acc = 0.0
     for img_data, img_h, img_w, size, ground_truth in zip(imgs, img_hs, img_ws, sizes, ground_truths):
-        out = model.forward(torch.from_numpy(img_data))
-
-        probs = out.detach().numpy()[0]
-        label_im = util.get_label_image(probs, img_h, img_w, size)
-
-        predicted = np.asarray(label_im.convert('RGB'))
-
-        acc += util.compute_jaccard_index(predicted, ground_truth)
-
-        del predicted
-        del label_im
-        del out
-        del probs
+        acc += compute_accuracy(params, model, img_data, img_h, img_w, size, ground_truth)
 
     return acc / len(imgs)
+
 
 def run_single_image(args):
     img_data, img_h, img_w, size = util.get_preprocessed_image(args.image)
 
-    output_file = args.output + "_labels.png"
+    output_file = args.output + "_labels.png" if args.output is not None else None
 
     ground_truth_image = Image.open(args.gt).convert('RGB')
     ground_truth = np.asarray(ground_truth_image)
@@ -111,12 +110,8 @@ def run_single_image(args):
         np.save(args.output, params[best_params_idx])
 
     model.set_params(DenseCRFParams(*best_params))
-
-    out = model.forward(torch.from_numpy(img_data))
-
-    probs = out.detach().numpy()[0]
-    label_im = util.get_label_image(probs, img_h, img_w, size)
-    label_im.save(output_file)
+    accuracy = compute_accuracy(best_params, model, img_data, img_h, img_w, size, ground_truth, output_file)
+    print('Got accuracy {}'.format(accuracy))
 
 
 def run_multiple_images(args):
@@ -140,16 +135,11 @@ def run_multiple_images(args):
             ground_truth = np.asarray(ground_truth_image)
             gts.append(ground_truth)
 
-    output_file = args.output + "_labels.png"
-
     model = CrfRnnNet()
     model.load_state_dict(torch.load(args.weights))
     model.eval()
 
     scales = np.array([50.0, 1.0, 1.0, 1.0, 1.0])
-
-    acc = lambda x: compute_average_accuracy(DenseCRFParams(*(scales.ravel() * x)), model, imgs, img_hs, img_ws, sizes,
-                                     gts)
 
     bounds = np.array([
         [0.01, 10.0],
@@ -159,14 +149,63 @@ def run_multiple_images(args):
         [0.01, 10.0]
     ])
 
-    params, losses = bayesian_optimisation(args.iterations, acc, bounds=bounds, n_pre_samples=5)
-    params *= scales.reshape(1, -1)
+    if args.parameters:
+        best_params = np.load(args.parameters)
+    else:
+        acc = lambda x: compute_average_accuracy(DenseCRFParams(*(scales.ravel() * x)), model, imgs, img_hs, img_ws, sizes,
+                                         gts)
 
-    best_params_idx = np.argmax(losses)
+        params, losses = bayesian_optimisation(args.iterations, acc, bounds=bounds, n_pre_samples=10)
+        params *= scales.reshape(1, -1)
 
-    print(f'Got best params {params[best_params_idx]} with loss {losses[best_params_idx]}')
+        best_params_idx = np.argmax(losses)
+        best_params = params[best_params_idx]
 
-    np.save(args.output, params[best_params_idx])
+        print(f'Got best params {params[best_params_idx]} with loss {losses[best_params_idx]}')
+
+        np.save(args.output, params[best_params_idx])
+
+    if(args.evaluate):
+        default_acc = compute_average_accuracy(DenseCRFParams(), model, imgs, img_hs, img_ws, sizes, gts)
+        opt_acc = compute_average_accuracy(DenseCRFParams(*best_params.ravel()), model, imgs, img_hs, img_ws, sizes, gts)
+        print('Accuracy with default parameters: {}'.format(default_acc), flush=True)
+        print('Accuracy with optimized parameters: {}'.format(opt_acc), flush=True)
+        print('Difference: {}'.format(opt_acc - default_acc), flush=True)
+        evaluate_parameters(best_params,
+                            ('alpha', 'beta', 'gamma', 'spatial_ker_weight', 'bilateral_ker_weight'),
+                            model,
+                            bounds,
+                            scales,
+                            args.num_eval_pts,
+                            imgs,
+                            img_hs,
+                            img_ws,
+                            sizes,
+                            gts,
+                            args.output)
+
+
+def evaluate_parameters(params, param_names, model, bounds, scales, num_points, imgs, img_hs, img_ws, sizes, ground_truths, graph_fname):
+    for idx, name in enumerate(param_names):
+        print('Evaluating {}'.format(name), end='', flush=True)
+        b = bounds[idx]
+        p = np.copy(params)
+        s = scales[idx]
+        space = s * np.linspace(b[0], b[1], num_points, endpoint=True)
+        accs = []
+        for pt in space:
+            print('.', end='', flush=True)
+            p[idx] = pt
+            accs.append(compute_average_accuracy(DenseCRFParams(*p), model, imgs, img_hs, img_ws, sizes, ground_truths))
+        plt.clf()
+        plt.plot(space, accs, label='Accuracies')
+        plt.axvline(params[idx], color='r', linestyle='dashed', label='Estimated optimal value')
+        plt.title('Accuracy When Varying {}'.format(name))
+        plt.xlabel('Parameter value')
+        plt.ylabel('Jaccard Score (Accuracy)')
+        plt.legend()
+        plt.savefig(graph_fname + '_' + name + '.png')
+        print('DONE', flush=True)
 
 
 def main():
@@ -183,6 +222,8 @@ def main():
     parser.add_argument("--parameters", help="Path to the input parameters")
     parser.add_argument("--iterations", help="Number of iterations for Bayesian opt", type=int, default=25)
     parser.add_argument('--file', help='File of images and ground truths', type=str)
+    parser.add_argument('--evaluate', action='store_true', help='Evaluate parameters (only when used with --file)')
+    parser.add_argument('--num-eval-pts', help='Number of points to use for evaluation', type=int, default=10)
 
 
     args = parser.parse_args()

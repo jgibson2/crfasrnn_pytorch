@@ -40,7 +40,7 @@ class CrfRnnNet(Fcn8s):
         self.crfrnn = CrfRnn(num_labels=num_labels, num_iterations=num_iterations, crf_init_params=params)
 
     def set_params(self, params):
-        self.crfrnn.params = params
+        self.crfrnn.set_params(params)
 
     def forward(self, image):
         out = super(CrfRnnNet, self).forward(image)

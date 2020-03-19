@@ -22,10 +22,6 @@ def expected_improvement(x, gaussian_process, evaluated_loss):
         evaluated_loss: Numpy array.
             Numpy array that contains the values off the loss function for the previously
             evaluated hyperparameters.
-        greater_is_better: Boolean.
-            Boolean flag that indicates whether the loss function is to be maximised or minimised.
-        n_params: int.
-            Dimension of the hyperparameter space.
     """
 
     mu, sigma = gaussian_process.predict(x.reshape(1, -1), return_std=True)
@@ -82,7 +78,7 @@ def sample_next_hyperparameter(acquisition_func, gaussian_process, evaluated_los
 
 
 def bayesian_optimisation(n_iters, sample_loss, bounds, x0=None, n_pre_samples=5,
-                          gp_params=None, random_search=False, alpha=1e-5, epsilon=1e-7, verbose=True):
+                          gp_params=None, random_search=False, alpha=1e-5, epsilon=1e-7, evenly_spaced=False, verbose=True):
     """ bayesian_optimisation
     Uses Gaussian Processes to optimise the loss function `sample_loss`.
     Arguments:
@@ -118,7 +114,11 @@ def bayesian_optimisation(n_iters, sample_loss, bounds, x0=None, n_pre_samples=5
         print(f'# of parameters: {n_params}')
 
     if x0 is None:
-        for i,params in enumerate(np.random.uniform(bounds[:, 0], bounds[:, 1], (n_pre_samples, bounds.shape[0]))):
+        if evenly_spaced:
+            pts = np.linspace(bounds[:, 0], bounds[:, 1], n_pre_samples)
+        else:
+            pts = np.random.uniform(bounds[:, 0], bounds[:, 1], (n_pre_samples, bounds.shape[0]))
+        for i,params in enumerate(pts):
             x_list.append(params)
             y_list.append(sample_loss(params))
             if verbose:

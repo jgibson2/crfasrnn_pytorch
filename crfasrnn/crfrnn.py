@@ -90,6 +90,7 @@ class CrfRnn(nn.Module):
         Returns:
             log-Q distributions (logits) after CRF inference
         """
+
         if logits.shape[0] != 1:
             raise ValueError("Only batch size 1 is currently supported!")
 
@@ -131,3 +132,25 @@ class CrfRnn(nn.Module):
             cur_logits = msg_passing_out + logits
 
         return torch.unsqueeze(cur_logits, 0)
+
+    def set_params(self, params=None, num_iterations=None):
+        if params is not None:
+            self.params = params
+            # Spatial kernel weights
+            self.spatial_ker_weights = nn.Parameter(
+                self.params.spatial_ker_weight
+                * torch.eye(self.num_labels, dtype=torch.float32)
+            )
+
+            # Bilateral kernel weights
+            self.bilateral_ker_weights = nn.Parameter(
+                self.params.bilateral_ker_weight
+                * torch.eye(self.num_labels, dtype=torch.float32)
+            )
+
+            # Compatibility transform matrix
+            self.compatibility_matrix = nn.Parameter(
+                torch.eye(self.num_labels, dtype=torch.float32)
+            )
+        if num_iterations is not None:
+            self.num_iterations = num_iterations
