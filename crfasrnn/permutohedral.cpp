@@ -324,7 +324,7 @@ void Permutohedral::init (const float* features, int num_dimensions, int num_poi
 	// Compute the lattice coordinates for each feature [there is going to be a lot of magic here
 	N_ = num_points;
 	d_ = num_dimensions;
-	HashTableCopy hash_table( d_, N_*(d_+1) );
+	HashTable hash_table( d_, N_*(d_+1) );
 
 	// Allocate the class memory
 	offset_.resize( (d_+1)*N_ );

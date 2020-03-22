@@ -36,7 +36,7 @@ import matplotlib.pyplot as plt
 from optimize_parameters import *
 
 matplotlib.use('TkAgg')
-plt.rcParams["figure.figsize"] = (20,16)
+plt.rcParams["figure.figsize"] = (5,4)
 
 
 def compute_accuracy(params, model, img_data, img_h, img_w, size, ground_truth, output_file=None):
@@ -86,17 +86,17 @@ def run_single_image(args):
     if args.parameters:
         best_params = np.load(args.parameters)
     else:
-        scales = np.array([50.0, 1.0, 1.0, 1.0, 1.0])
+        scales = np.array([500.0, 10.0, 10.0, 10.0, 10.0])
 
         acc = lambda x: compute_accuracy(DenseCRFParams(*(scales.ravel() * x)), model, img_data, img_h, img_w, size,
                                          ground_truth)
 
         bounds = np.array([
-            [0.01, 10.0],
-            [0.01, 10.0],
-            [0.01, 10.0],
-            [0.01, 10.0],
-            [0.01, 10.0]
+            [0.01, 1.0],
+            [0.01, 1.0],
+            [0.01, 1.0],
+            [0.01, 1.0],
+            [0.01, 1.0]
         ])
 
         params, losses = bayesian_optimisation(args.iterations, acc, bounds=bounds, n_pre_samples=5)

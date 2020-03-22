@@ -29,7 +29,6 @@ import os
 import re
 from crfasrnn import util
 import numpy as np
-from PIL import Image
 from crfasrnn.crfasrnn_model import CrfRnnNet
 from crfasrnn.params import DenseCRFParams
 

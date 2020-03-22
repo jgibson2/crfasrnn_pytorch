@@ -31,8 +31,9 @@ def expected_improvement(x, gaussian_process, evaluated_loss):
     # In case sigma equals zero
     with np.errstate(divide='ignore'):
         Z = (mu - loss_optimum) / sigma
-        expected_improvement = (mu - loss_optimum) * norm.cdf(Z) + sigma * norm.pdf(Z)
-        expected_improvement[sigma == 0.0] = 0.0
+        # expected_improvement = (mu - loss_optimum) * norm.cdf(Z) + sigma * norm.pdf(Z)
+        # expected_improvement[sigma == 0.0] = 0.0
+        expected_improvement = np.max(mu - loss_optimum, 0) + sigma * norm.pdf(Z) - np.abs(mu - loss_optimum) * norm.cdf(Z)
 
     return -1 * expected_improvement
 
@@ -58,7 +59,7 @@ def sample_next_hyperparameter(acquisition_func, gaussian_process, evaluated_los
             Number of times to run the minimiser with different starting points.
     """
     best_x = None
-    best_acquisition_value = 1.0
+    best_acquisition_value = np.inf
     n_params = bounds.shape[0]
 
     for starting_point in np.random.uniform(bounds[:, 0], bounds[:, 1], size=(n_restarts, n_params)):
@@ -162,7 +163,7 @@ def bayesian_optimisation(n_iters, sample_loss, bounds, x0=None, n_pre_samples=5
             next_sample = sample_next_hyperparameter(expected_improvement, model, yp, bounds=bounds, n_restarts=100)
 
         # Duplicates will break the GP. In case of a duplicate, we will randomly sample a next query point.
-        if np.any(np.abs(next_sample - xp) <= epsilon):
+        while np.any(np.abs(next_sample - xp) <= epsilon):
             next_sample = np.random.uniform(bounds[:, 0], bounds[:, 1], bounds.shape[0])
 
         if verbose:
@@ -173,7 +174,7 @@ def bayesian_optimisation(n_iters, sample_loss, bounds, x0=None, n_pre_samples=5
         cv_score = sample_loss(next_sample)
 
         if verbose:
-            print(f'Got loss value: {cv_score}')
+            print(f'Got true value: {cv_score}')
 
         # Update lists
         x_list.append(next_sample)
